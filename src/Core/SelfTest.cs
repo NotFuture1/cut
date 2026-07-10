@@ -9,7 +9,11 @@ public static class SelfTest
 {
     private static string _log = "";
 
-    public static int Run()
+    // must not run on the wpf dispatcher thread: the steps block on async code,
+    // and continuations posting back to a blocked dispatcher would deadlock.
+    public static int Run() => Task.Run(RunCore).GetAwaiter().GetResult();
+
+    private static int RunCore()
     {
         Paths.EnsureBaseDirs();
         _log = Path.Combine(Paths.LogsDir, "selftest.log");

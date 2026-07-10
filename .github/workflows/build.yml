@@ -38,6 +38,7 @@ jobs:
 
       # headless smoke test: libmpv loads, ffmpeg works, both export modes produce correct output
       - name: Selftest
+        timeout-minutes: 10
         run: |
           $exe = (Resolve-Path publish/cut.exe).Path
           $p = Start-Process $exe -ArgumentList '--selftest' -Wait -PassThru
