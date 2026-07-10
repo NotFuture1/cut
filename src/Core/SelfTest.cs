@@ -81,7 +81,10 @@ public static class SelfTest
     private static string Step3Fixture()
     {
         Directory.CreateDirectory(Paths.SelfTestDir);
-        var fixture = Path.Combine(Paths.SelfTestDir, "test.mkv");
+        // mp4, not mkv: ffmpeg's mkv muxer only writes seek cues at ~5s cluster
+        // boundaries, so -ss on a synthetic mkv snaps way earlier than the true
+        // keyframe grid and the duration assertions become meaningless
+        var fixture = Path.Combine(Paths.SelfTestDir, "test.mp4");
         var (code, err) = ExportJob.RunFfmpegAsync(FfmpegArgs.Fixture(fixture), CancellationToken.None)
             .GetAwaiter().GetResult();
         Require(code == 0 && File.Exists(fixture), $"fixture generated{(code != 0 ? $": {err}" : "")}");
@@ -124,8 +127,10 @@ public static class SelfTest
         Require(ok, $"lossless export succeeds{(ok ? "" : $": {err}")}");
 
         var outInfo = Probe.RunAsync(outPath).GetAwaiter().GetResult();
-        Require(outInfo.Duration is > 3.4 and < 6.6,
-            $"lossless duration ~5s within keyframe tolerance (got {outInfo.Duration:0.00})");
+        // segment starts sit exactly on the fixture's 1s keyframe grid, so the
+        // only slack needed is audio frame padding at the joints
+        Require(outInfo.Duration is > 4.4 and < 5.7,
+            $"lossless duration ~5s (got {outInfo.Duration:0.00})");
         Require(outInfo.AudioTracks.Count == 2, $"lossless keeps 2 audio tracks (got {outInfo.AudioTracks.Count})");
     }
 
