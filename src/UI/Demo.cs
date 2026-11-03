@@ -53,7 +53,21 @@ public sealed class Demo
     private double Now => _clock.Elapsed.TotalSeconds;
     private void Begin() => _markStart = Now;
     private void End(string name) => _clips.Add((name, Math.Max(0, _markStart - 0.3), Now + 0.5));
-    private void Still(string name) => _stills.Add((name, Now));
+    // stills are grabbed live (one gdigrab frame) so they show exactly this moment
+    private async Task Still(string name)
+    {
+        _stills.Add((name, Now));
+        var b = Native.VisibleBounds(_w);
+        var dir = Path.Combine(_out, "guide");
+        Directory.CreateDirectory(dir);
+        await ExportJob.RunFfmpegAsync(new List<string>
+        {
+            "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-f", "gdigrab", "-draw_mouse", "0",
+            "-offset_x", b.Left.ToString(CultureInfo.InvariantCulture), "-offset_y", b.Top.ToString(CultureInfo.InvariantCulture),
+            "-video_size", $"{(b.Right - b.Left) & ~1}x{(b.Bottom - b.Top) & ~1}", "-i", "desktop", "-frames:v", "1",
+            Path.Combine(dir, name + ".png"),
+        }, CancellationToken.None, log: false);
+    }
 
     public async Task RunAsync()
     {
@@ -170,7 +184,7 @@ public sealed class Demo
         await Until(() => _w.Media != null && S.Segments.Length == 1, 15000);
         await Task.Delay(2500); // let waveforms and thumbnails fill in
         Check(_w.Media != null && S.AudioLanes.Length == 2, "open", $"opened, {S.AudioLanes.Length} audio lanes");
-        Still("overview-start");
+        await Still("overview-start");
         End("01-open");
         var dur = _w.Duration;
 
@@ -195,7 +209,7 @@ public sealed class Demo
         await Task.Delay(900);
         Check(S.Segments.Length == 2 && Math.Abs(S.Segments[0].End - 10.4) < 0.15, "cut range",
             string.Join(" ", S.Segments.Select(x => $"[{x.Start:0.00},{x.End:0.00}]")));
-        Still("cut");
+        await Still("cut");
         End("03-cut");
 
         // 4. mute part of one track
@@ -207,7 +221,7 @@ public sealed class Demo
         await Key(0x4D); // m
         await Task.Delay(1000);
         Check(S.FindLane(mic.Id)?.Mutes.Length == 1, "mute part", $"mic mutes {S.FindLane(mic.Id)?.Mutes.Length}");
-        Still("mute");
+        await Still("mute");
         End("04-mute");
 
         // 5. tracks: turn one down, move another above it
@@ -240,7 +254,7 @@ public sealed class Demo
             await Task.Delay(160);
         }
         await Task.Delay(1200);
-        Still("fast-zoom");
+        await Still("fast-zoom");
         await Click(Center(_w.ExactMode));
         await Task.Delay(500);
         Tl.Fit();
@@ -272,7 +286,7 @@ public sealed class Demo
             Check(S.FindClip(clipId)!.Value.Clip.W > moved.W + 0.02, "resize layer", $"w {moved.W:0.00} -> {S.FindClip(clipId)!.Value.Clip.W:0.00}");
         }
         else Check(false, "drag layer on video", "no video rect");
-        Still("layer");
+        await Still("layer");
         End("07-layer");
 
         // 8. music on its own lane, slid along the timeline
@@ -307,11 +321,11 @@ public sealed class Demo
         var dlg = _w.OpenExport(modal: false);
         if (dlg == null) { Check(false, "export", "no dialog"); return; }
         await Task.Delay(900);
-        Still("export-dialog-original");
+        await Still("export-dialog-original");
         var discord = dlg.Presets.Children.OfType<Button>().First(b => b.Tag as string == "discord");
         await Click(Center(discord));
         await Task.Delay(1100);
-        Still("export-dialog");
+        await Still("export-dialog");
         var outPath = dlg.OutBox.Text;
         await Click(Center(dlg.ExportBtn));
         await Until(() => dlg.RunStatus.Text is "done" or "export failed", 180000);
@@ -319,7 +333,7 @@ public sealed class Demo
         var exported = File.Exists(outPath) ? new FileInfo(outPath).Length : 0;
         Check(dlg.RunStatus.Text == "done" && exported > 0 && exported <= 10_000_000, "export",
             $"{dlg.RunStatus.Text}, {SizeFmt.Bytes(exported)} {dlg.ErrorBox.Text}");
-        Still("export-done");
+        await Still("export-done");
         End("10-export");
         dlg.Close();
         if (exported > 0)
@@ -331,7 +345,7 @@ public sealed class Demo
             File.Copy(outPath, Path.Combine(_out, "exported.mp4"), true);
         }
         await Task.Delay(600);
-        Still("final");
+        await Still("final");
     }
 
     // ---- window, assets, recording ----
@@ -473,14 +487,6 @@ public sealed class Demo
                 "-loop", "0", Path.Combine(gifs, name + ".gif"),
             }, CancellationToken.None, log: false);
             Check(code == 0, "gif " + name, code == 0 ? $"{T(end - start)}s" : err);
-        }
-        foreach (var (name, at) in _stills)
-        {
-            await ExportJob.RunFfmpegAsync(new List<string>
-            {
-                "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-ss", T(Math.Max(0, at - lag)), "-i", raw, "-frames:v", "1",
-                Path.Combine(gifs, name + ".png"),
-            }, CancellationToken.None, log: false);
         }
         // a small full-length mp4 of the whole walkthrough
         await ExportJob.RunFfmpegAsync(new List<string>
