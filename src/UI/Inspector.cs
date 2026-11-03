@@ -433,7 +433,21 @@ public sealed class Inspector
                 for (int col = 0; col < 3; col++)
                 {
                     var (rr, cc) = (r, col);
-                    var b = new Button { Style = St("DarkButton"), Padding = new Thickness(0), Margin = new Thickness(1.5), ToolTip = "snap here" };
+                    // an alignment picker: the dot sits where the layer will go
+                    var dot = new System.Windows.Shapes.Ellipse
+                    {
+                        Width = 5, Height = 5, Fill = Res("TextDimBrush"),
+                        HorizontalAlignment = cc == 0 ? HorizontalAlignment.Left : cc == 1 ? HorizontalAlignment.Center : HorizontalAlignment.Right,
+                        VerticalAlignment = rr == 0 ? VerticalAlignment.Top : rr == 1 ? VerticalAlignment.Center : VerticalAlignment.Bottom,
+                        Margin = new Thickness(5, 3, 5, 3),
+                    };
+                    var b = new Button
+                    {
+                        Style = St("DarkButton"), Padding = new Thickness(0), Margin = new Thickness(1.5),
+                        ToolTip = $"{(rr == 0 ? "top" : rr == 1 ? "middle" : "bottom")} {(cc == 0 ? "left" : cc == 1 ? "center" : "right")}",
+                        HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch,
+                        Content = new Grid { Children = { dot } },
+                    };
                     b.Click += (_, _) => Commit(Upd(c =>
                     {
                         const double m = 0.03;

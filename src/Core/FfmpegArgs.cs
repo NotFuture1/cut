@@ -121,10 +121,12 @@ public sealed class ExportPlan
         int nIn = 0;
         var fc = new List<string>();
 
-        // each kept segment is its own seeked input: only kept footage is ever decoded
+        // each kept segment is its own seeked input: only kept footage is ever decoded.
+        // gpu decoding per input is only worth it (and only fits in vram) for a handful of them
+        var hwdec = o.HwDecode && segs.Count <= 8;
         foreach (var seg in segs)
         {
-            if (o.HwDecode) inputs.AddRange(new[] { "-hwaccel", "auto" });
+            if (hwdec) inputs.AddRange(new[] { "-hwaccel", "auto" });
             inputs.AddRange(new[] { "-ss", T(seg.Start), "-t", T(seg.Duration), "-i", m.FilePath });
             nIn++;
         }

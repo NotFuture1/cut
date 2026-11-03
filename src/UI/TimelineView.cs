@@ -436,13 +436,13 @@ public sealed class TimelineView : FrameworkElement
                 if (x >= HeaderW) VLine(dc, B(0x2E, 0x2E, 0x35), x, RulerH - 4, RulerH - 1);
             }
         }
-        var t = Math.Floor(ViewStart / minor) * minor;
-        for (; t <= ViewStart + Span + step; t += minor)
+        // integer tick index: no float drift on long timelines
+        for (var k = (long)Math.Floor(ViewStart / minor); k * minor <= ViewStart + Span + step; k++)
         {
+            var t = k * minor;
             var x = TimeToX(t);
             if (x < HeaderW - 60 || x > w + 60) continue;
-            var major = Math.Abs(t / step - Math.Round(t / step)) < 1e-6;
-            if (major)
+            if (k % 5 == 0)
             {
                 VLine(dc, B(0x4A, 0x4A, 0x53), x, RulerH - 9, RulerH - 1);
                 var label = Text(TimeFmt.Ruler(t, step), 10.5, TextFaint);
@@ -491,10 +491,11 @@ public sealed class TimelineView : FrameworkElement
             var slotW = hh * Media.Aspect;
             var spanPerSlot = slotW / LaneW * Span;
             double[] grid = { 0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200 };
-            var q = grid.FirstOrDefault(g => g >= spanPerSlot * 0.9, grid[^1]);
+            // step no wider than one slot so thumbs tile with no gaps; grid values keep zoom levels cached
+            var q = grid.LastOrDefault(g => g <= spanPerSlot, grid[0]);
             var first = Math.Floor(ViewStart / q) * q;
             var wanted = new HashSet<long>();
-            for (var t = first; t <= ViewStart + Span + q; t += q)
+            for (var t = first; t <= ViewStart + Span + q && t < Duration; t += q)
             {
                 var x = TimeToX(t);
                 if (x + slotW < HeaderW || x > w) continue;
@@ -563,12 +564,18 @@ public sealed class TimelineView : FrameworkElement
                 var x1 = TimeToX(seg.Start);
                 if (x1 < HeaderW || x0 > w) continue;
                 var r = new Rect(x0, top, Math.Max(1, x1 - x0), hh);
+                // this footage is not cut in fast mode: show it bright, tinted amber
                 dc.DrawRectangle(WarnSoft, null, r);
-                Bracket(dc, Warn, land.Value, top, hh, left: true, strong: false);
-                if (x1 - x0 > 46)
+                dc.DrawRectangle(WarnSoft, null, r);
+                Bracket(dc, Warn, land.Value, top, hh, left: true, strong: true);
+                VLine(dc, Warn, x1, top, top + hh);
+                var visL = Math.Max(x0, HeaderW);
+                if (x1 - visL > 40)
                 {
-                    var label = Text($"+{TimeFmt.Dur(seg.Start - land.Value)}", 10, Warn);
-                    dc.DrawText(label, new Point(x0 + 6, top + 3));
+                    var label = Text($"fast starts {TimeFmt.Dur(seg.Start - land.Value)} early", 10, Warn);
+                    if (label.Width + 12 > x1 - visL) label = Text($"+{TimeFmt.Dur(seg.Start - land.Value)}", 10, Warn);
+                    dc.DrawRectangle(BA(0xC0, 0x0E, 0x0E, 0x10), null, new Rect(visL + 5, top + hh - label.Height - 6, label.Width + 6, label.Height + 2));
+                    dc.DrawText(label, new Point(visL + 8, top + hh - label.Height - 5));
                 }
             }
         }
@@ -586,9 +593,10 @@ public sealed class TimelineView : FrameworkElement
                 HLine(dc, Accent, x0, x1, top, 2);
                 HLine(dc, Accent, x0, x1, top + hh - 2 / _dpi, 2);
             }
+            // untouched ends get a quieter handle, real cuts the bright one
             var brush = sel ? Accent : TextB;
-            if (seg.Start > 0.0005 || sel) Bracket(dc, brush, seg.Start, top, hh, left: true, strong: sel);
-            if (seg.End < Duration - 0.0005 || sel) Bracket(dc, brush, seg.End, top, hh, left: false, strong: sel);
+            Bracket(dc, seg.Start > 0.0005 || sel ? brush : TextDim, seg.Start, top, hh, left: true, strong: sel);
+            Bracket(dc, seg.End < Duration - 0.0005 || sel ? brush : TextDim, seg.End, top, hh, left: false, strong: sel);
         }
     }
 

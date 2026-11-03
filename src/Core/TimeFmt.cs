@@ -42,17 +42,20 @@ public static class TimeFmt
     // ruler labels: 0:05, 1:30, 1:02:03; sub-second steps get decimals
     public static string Ruler(double seconds, double step)
     {
-        if (seconds < 0) seconds = 0;
-        var whole = Math.Floor(seconds + 1e-6);
-        var ts = TimeSpan.FromSeconds(whole);
-        var head = ts.TotalHours >= 1
-            ? string.Create(CultureInfo.InvariantCulture, $"{(int)ts.TotalHours}:{ts.Minutes:00}:{ts.Seconds:00}")
-            : string.Create(CultureInfo.InvariantCulture, $"{ts.Minutes}:{ts.Seconds:00}");
+        // work in centiseconds so float drift in the tick loop can't print 0:05.-0
+        var cs = (long)Math.Round(Math.Max(0, seconds) * 100);
+        var whole = cs / 100;
+        var h = whole / 3600;
+        var m = whole / 60 % 60;
+        var s = whole % 60;
+        var head = h > 0
+            ? string.Create(CultureInfo.InvariantCulture, $"{h}:{m:00}:{s:00}")
+            : string.Create(CultureInfo.InvariantCulture, $"{m}:{s:00}");
         if (step >= 1) return head;
-        var frac = seconds - whole;
-        var digits = step >= 0.1 ? 1 : 2;
-        var f = Math.Round(frac * Math.Pow(10, digits));
-        return head + "." + f.ToString(new string('0', digits), CultureInfo.InvariantCulture);
+        var frac = cs % 100;
+        return step >= 0.1
+            ? head + "." + (frac / 10).ToString(CultureInfo.InvariantCulture)
+            : head + "." + frac.ToString("00", CultureInfo.InvariantCulture);
     }
 
     // accepts 12, 12.5, 1:02.3, 1:02:03.25 (also comma decimals)

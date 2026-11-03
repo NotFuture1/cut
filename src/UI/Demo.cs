@@ -176,7 +176,7 @@ public sealed class Demo
         // 2. trim both ends by dragging the edges
         Begin();
         var vl = Tl.VideoLaneRect();
-        await Drag(AtTime(0, vl), AtTime(3.0, vl), 1000);
+        await Drag(AtTime(0, vl) + new Vector(2, 0), AtTime(3.0, vl), 1000);
         await MoveTo(AtTime(S.Segments[0].Start, vl) + new Vector(0, -4), 200);
         await Task.Delay(700);
         Check(Math.Abs(S.Segments[0].Start - 3.0) < 0.15, "trim start", $"start {S.Segments[0].Start:0.000}");

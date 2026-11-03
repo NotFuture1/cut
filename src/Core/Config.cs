@@ -12,7 +12,7 @@ public sealed class Config
     [JsonPropertyName("lastMediaDir")] public string? LastMediaDir { get; set; }
     [JsonPropertyName("previewVolume")] public double PreviewVolume { get; set; } = 100;
     [JsonPropertyName("skipCuts")] public bool SkipCuts { get; set; } = true;
-    [JsonPropertyName("timelineHeight")] public double TimelineHeight { get; set; } = 230;
+    [JsonPropertyName("timelineHeight")] public double TimelineHeight { get; set; } = 290;
     [JsonPropertyName("inspector")] public bool InspectorOpen { get; set; } = true;
 
     // export defaults, remembered between exports
