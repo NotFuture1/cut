@@ -1,6 +1,6 @@
 # changelog
 
-## v0.2.0
+## v0.2.1
 
 cut is now a small editor, not just a trimmer. everything is faster, and new versions install over the old one.
 

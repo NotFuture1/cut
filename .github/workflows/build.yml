@@ -140,7 +140,8 @@ jobs:
         run: |
           $v = '${{ steps.v.outputs.version }}'
           $text = Get-Content CHANGELOG.md -Raw
-          $m = [regex]::Match($text, "(?ms)^## v$([regex]::Escape($v))\b.*?$(.*?)(?=^## v|\z)")
+          $pattern = '(?ms)^## v' + [regex]::Escape($v) + '\b[^\n]*\n(.*?)(?=^## v|\z)'
+          $m = [regex]::Match($text, $pattern)
           $body = if ($m.Success) { $m.Groups[1].Value.Trim() } else { "cut v$v" }
           Set-Content -Path release-notes.md -Value $body -Encoding utf8
 
