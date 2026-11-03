@@ -12,6 +12,12 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 50
+    env:
+      # libmpv build to use; falls back to upstream's newest when it has aged out (they keep ~30 days)
+      MPV_PREFERRED: '20261103'
+      CUT_NO_UPDATE: '1'
+      CUT_MPV_NOAUDIO: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -19,24 +25,48 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Publish
-        run: dotnet publish src/Cut.csproj -c Release -r win-x64 --self-contained -p:PublishReadyToRun=true -o publish
+      - name: Version
+        id: v
+        run: |
+          $v = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF -replace 'refs/tags/v','' } else { ([xml](Get-Content src/Cut.csproj)).Project.PropertyGroup.Version }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "version $v"
 
-      # ffmpeg + ffprobe from BtbN (same source rewind uses)
+      - name: Publish
+        run: dotnet publish src/Cut.csproj -c Release -r win-x64 --self-contained -p:PublishReadyToRun=true -p:Version=${{ steps.v.outputs.version }} -o publish
+
+      # shared ffmpeg build: ffmpeg.exe and ffprobe.exe share one set of dlls (smaller download + install)
       - name: Fetch ffmpeg
         run: |
-          Invoke-WebRequest https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip -OutFile ffmpeg.zip
+          Invoke-WebRequest https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-win64-gpl-shared-8.1.zip -OutFile ffmpeg.zip
           Expand-Archive ffmpeg.zip ffmpeg-tmp
-          Copy-Item ffmpeg-tmp/*/bin/ffmpeg.exe, ffmpeg-tmp/*/bin/ffprobe.exe publish/
+          $bin = Join-Path (Get-ChildItem ffmpeg-tmp -Directory | Select-Object -First 1).FullName 'bin'
+          Copy-Item "$bin\ffmpeg.exe", "$bin\ffprobe.exe" publish/
+          Copy-Item "$bin\*.dll" publish/
+          & publish/ffmpeg.exe -hide_banner -version | Select-Object -First 1
 
-      # libmpv pinned exactly so an upstream change is never the mystery variable in a failed test
       - name: Fetch libmpv
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          Invoke-WebRequest https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20260610/mpv-dev-x86_64-20260610-git-304426c.7z -OutFile libmpv.7z
-          7z x libmpv.7z -olibmpv-tmp
+          $repo = 'shinchiro/mpv-winbuild-cmake'
+          function DevAsset($tag) {
+            gh release view $tag -R $repo --json assets --jq '.assets[].name' 2>$null |
+              Where-Object { $_ -match '^mpv-dev-x86_64-\d+-git-[0-9a-f]+\.7z$' } | Select-Object -First 1
+          }
+          $tag = $env:MPV_PREFERRED
+          $asset = DevAsset $tag
+          if (-not $asset) {
+            $tag = gh api "repos/$repo/releases/latest" --jq .tag_name
+            $asset = DevAsset $tag
+            Write-Host "::warning::libmpv $env:MPV_PREFERRED is gone upstream, using $tag"
+          }
+          Write-Host "libmpv: $tag $asset"
+          gh release download $tag -R $repo -p $asset -O libmpv.7z
+          7z x libmpv.7z -olibmpv-tmp | Out-Null
           Copy-Item (Get-ChildItem libmpv-tmp -Recurse -Filter libmpv-2.dll | Select-Object -First 1).FullName publish/
 
-      # headless smoke test: libmpv loads, ffmpeg works, both export modes produce correct output
+      # headless: libmpv through our p/invoke surface, preview graph + layer rendering, every export path
       - name: Selftest
         timeout-minutes: 10
         run: |
@@ -51,11 +81,42 @@ jobs:
           $log = "$env:LOCALAPPDATA/cut/logs/selftest.log"
           if (Test-Path $log) { Get-Content $log } else { Write-Host "no selftest log" }
 
-      - name: Version
-        id: v
+      - name: Display
         run: |
-          $v = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF -replace 'refs/tags/v','' } else { '0.0.0' }
-          "version=$v" >> $env:GITHUB_OUTPUT
+          try { Set-DisplayResolution -Width 1920 -Height 1080 -Force -ErrorAction Stop } catch { Write-Host "resolution unchanged: $_" }
+          Add-Type -AssemblyName System.Windows.Forms
+          [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+
+      # real-input walkthrough of the ui: checks each edit lands, records the guide gifs
+      - name: Demo
+        id: demo
+        timeout-minutes: 14
+        continue-on-error: true
+        run: |
+          $exe = (Resolve-Path publish/cut.exe).Path
+          $out = Join-Path $pwd 'demo-out'
+          $p = Start-Process $exe -ArgumentList '--demo', "`"$out`"" -Wait -PassThru
+          Write-Host "demo exit code: $($p.ExitCode)"
+          if (Test-Path demo-out/demo.log) { Get-Content demo-out/demo.log }
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      - name: App log
+        if: always()
+        run: |
+          $log = "$env:LOCALAPPDATA/cut/logs/cut.log"
+          if (Test-Path $log) { Get-Content $log -Tail 200 }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guide
+          path: |
+            demo-out/guide/**
+            demo-out/demo.json
+            demo-out/demo.log
+            demo-out/walkthrough.mp4
+            demo-out/exported.mp4
+          if-no-files-found: ignore
 
       - name: Installer
         run: |
@@ -73,6 +134,15 @@ jobs:
             installer/Output/cut-setup-*.exe
             cut-*-portable.zip
 
+      - name: Release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          $v = '${{ steps.v.outputs.version }}'
+          $text = Get-Content CHANGELOG.md -Raw
+          $m = [regex]::Match($text, "(?ms)^## v$([regex]::Escape($v))\b.*?$(.*?)(?=^## v|\z)")
+          $body = if ($m.Success) { $m.Groups[1].Value.Trim() } else { "cut v$v" }
+          Set-Content -Path release-notes.md -Value $body -Encoding utf8
+
       - name: Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -80,4 +150,4 @@ jobs:
           files: |
             installer/Output/cut-setup-*.exe
             cut-*-portable.zip
-          generate_release_notes: true
+          body_path: release-notes.md

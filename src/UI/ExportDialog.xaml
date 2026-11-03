@@ -2,103 +2,140 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="export"
-        Background="{StaticResource WindowBgBrush}"
-        Width="480" SizeToContent="Height"
+        Background="{StaticResource PanelBgBrush}"
+        FontFamily="{StaticResource UiFont}"
+        Width="540" SizeToContent="Height"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
-    <StackPanel Margin="18,16">
+    <StackPanel Margin="22,18,22,20">
 
         <StackPanel x:Name="SetupPanel">
-            <Grid>
+            <TextBlock Text="export" Style="{StaticResource BaseText}" FontSize="18" FontWeight="SemiBold"/>
+            <TextBlock x:Name="SummaryText" Style="{StaticResource DimText}" Margin="0,3,0,0"/>
+
+            <Border Style="{StaticResource SegmentBox}" HorizontalAlignment="Left" Margin="0,16,0,0">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="ExactRadio" Style="{StaticResource Segment}" GroupName="xmode" Content="exact" Checked="OnModeChanged" IsChecked="True"/>
+                    <RadioButton x:Name="FastRadio" Style="{StaticResource Segment}" GroupName="xmode" Content="fast" Checked="OnModeChanged"/>
+                </StackPanel>
+            </Border>
+            <TextBlock x:Name="ModeNote" Style="{StaticResource DimText}" TextWrapping="Wrap" Margin="0,8,0,0" FontSize="11.5"/>
+
+            <!-- exact: size, resolution, fps -->
+            <StackPanel x:Name="ExactPanel" Margin="0,14,0,0">
+                <Border Background="{StaticResource RowBgBrush}" CornerRadius="10" Padding="14,12">
+                    <StackPanel>
+                        <DockPanel>
+                            <TextBlock x:Name="PercentText" DockPanel.Dock="Right" Style="{StaticResource DimText}"
+                                       VerticalAlignment="Bottom" Margin="0,0,0,2"/>
+                            <TextBlock x:Name="SizeText" Text="≈ 0 MB" Style="{StaticResource BaseText}" FontSize="22" FontWeight="SemiBold"/>
+                        </DockPanel>
+                        <Slider x:Name="SizeSlider" Style="{StaticResource AccentSlider}" Minimum="0" Maximum="1" Value="1"
+                                SmallChange="0.01" LargeChange="0.05" Margin="0,10,0,0" ValueChanged="OnSizeChanged"/>
+                        <DockPanel Margin="0,2,0,0">
+                            <TextBlock Text="original" DockPanel.Dock="Right" Style="{StaticResource LabelText}"/>
+                            <TextBlock Text="smaller" Style="{StaticResource LabelText}"/>
+                        </DockPanel>
+                        <WrapPanel x:Name="Presets" Margin="0,10,0,0">
+                            <Button Style="{StaticResource DarkButton}" Content="original" Tag="1" Click="OnPreset" Margin="0,0,6,6" Padding="10,4"/>
+                            <Button Style="{StaticResource DarkButton}" Content="high" Tag="0.5" Click="OnPreset" Margin="0,0,6,6" Padding="10,4"/>
+                            <Button Style="{StaticResource DarkButton}" Content="small" Tag="0.15" Click="OnPreset" Margin="0,0,6,6" Padding="10,4"/>
+                            <Button Style="{StaticResource DarkButton}" Content="fits discord · 10 mb" Tag="discord" Click="OnPreset" Margin="0,0,6,6" Padding="10,4"/>
+                            <Button Style="{StaticResource DarkButton}" Content="tiny" Tag="0.03" Click="OnPreset" Margin="0,0,6,6" Padding="10,4"/>
+                        </WrapPanel>
+                        <TextBlock x:Name="QualityText" Style="{StaticResource DimText}" FontSize="11.5" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="96"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="resolution" Style="{StaticResource DimText}" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="ResBox" Grid.Column="1" Style="{StaticResource DarkComboBox}" Margin="0,0,0,8"
+                              SelectionChanged="OnResChanged" HorizontalAlignment="Left" Width="240"/>
+                    <TextBlock Grid.Row="1" Text="frame rate" Style="{StaticResource DimText}" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="FpsBox" Grid.Row="1" Grid.Column="1" Style="{StaticResource DarkComboBox}"
+                              SelectionChanged="OnResChanged" HorizontalAlignment="Left" Width="240"/>
+                </Grid>
+            </StackPanel>
+
+            <!-- fast: estimate only -->
+            <Border x:Name="FastPanel" Background="{StaticResource RowBgBrush}" CornerRadius="10" Padding="14,12" Margin="0,14,0,0"
+                    Visibility="Collapsed">
+                <StackPanel>
+                    <DockPanel>
+                        <TextBlock x:Name="FastPercent" DockPanel.Dock="Right" Style="{StaticResource DimText}" VerticalAlignment="Bottom" Margin="0,0,0,2"/>
+                        <TextBlock x:Name="FastSize" Style="{StaticResource BaseText}" FontSize="22" FontWeight="SemiBold"/>
+                    </DockPanel>
+                    <TextBlock x:Name="FastNote" Style="{StaticResource DimText}" FontSize="11.5" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <Grid Margin="0,14,0,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="90"/>
+                    <ColumnDefinition Width="96"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="mode"
-                           Foreground="{StaticResource TextDimBrush}" FontSize="12" FontFamily="Segoe UI"
-                           VerticalAlignment="Center"/>
-                <ComboBox x:Name="ModeBox" Grid.Row="0" Grid.Column="1" Style="{StaticResource DarkComboBox}"
-                          SelectionChanged="OnModeChanged" Margin="0,0,0,8">
-                    <ComboBoxItem Content="lossless" IsSelected="True"/>
-                    <ComboBoxItem Content="precise (re-encode)"/>
-                </ComboBox>
+                <TextBlock x:Name="AudioLabel" Text="audio" Style="{StaticResource DimText}" VerticalAlignment="Center"/>
+                <Border x:Name="AudioBox" Grid.Column="1" Style="{StaticResource SegmentBox}" HorizontalAlignment="Left" Margin="0,0,0,8">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="MixRadio" Style="{StaticResource Segment}" GroupName="amode" Content="mix into one track"
+                                     IsChecked="True" Checked="OnAudioChanged"
+                                     ToolTip="what discord and most players expect: they only play the first track"/>
+                        <RadioButton x:Name="SeparateRadio" Style="{StaticResource Segment}" GroupName="amode" Content="keep tracks separate"
+                                     Checked="OnAudioChanged"/>
+                    </StackPanel>
+                </Border>
 
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="format"
-                           Foreground="{StaticResource TextDimBrush}" FontSize="12" FontFamily="Segoe UI"
-                           VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Text="format" Style="{StaticResource DimText}" VerticalAlignment="Center"/>
                 <ComboBox x:Name="FormatBox" Grid.Row="1" Grid.Column="1" Style="{StaticResource DarkComboBox}"
-                          SelectionChanged="OnFormatChanged" Margin="0,0,0,8">
-                    <ComboBoxItem Content="same as input" IsSelected="True"/>
-                    <ComboBoxItem Content="mp4"/>
-                    <ComboBoxItem Content="mkv"/>
-                </ComboBox>
+                          SelectionChanged="OnFormatChanged" Margin="0,0,0,8" HorizontalAlignment="Left" Width="240"/>
 
-                <TextBlock x:Name="CrfLabel" Grid.Row="2" Grid.Column="0" Text="quality"
-                           Foreground="{StaticResource TextDimBrush}" FontSize="12" FontFamily="Segoe UI"
-                           VerticalAlignment="Center" Visibility="Collapsed"/>
-                <DockPanel x:Name="CrfRow" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
-                           Visibility="Collapsed">
-                    <TextBlock x:Name="CrfValue" DockPanel.Dock="Right" Text="crf 18"
-                               Foreground="{StaticResource TextDimBrush}" FontSize="11.5" FontFamily="Consolas"
-                               VerticalAlignment="Center" Margin="8,0,0,0"/>
-                    <Slider x:Name="CrfSlider" Style="{StaticResource DarkSlider}"
-                            Minimum="16" Maximum="28" Value="18"
-                            IsSnapToTickEnabled="True" TickFrequency="1"
-                            ValueChanged="OnCrfChanged" VerticalAlignment="Center"/>
-                </DockPanel>
-
-                <TextBlock Grid.Row="3" Grid.Column="0" Text="save to"
-                           Foreground="{StaticResource TextDimBrush}" FontSize="12" FontFamily="Segoe UI"
-                           VerticalAlignment="Center"/>
-                <DockPanel Grid.Row="3" Grid.Column="1">
+                <TextBlock Grid.Row="2" Text="save to" Style="{StaticResource DimText}" VerticalAlignment="Center"/>
+                <DockPanel Grid.Row="2" Grid.Column="1">
                     <Button DockPanel.Dock="Right" Style="{StaticResource DarkButton}" Content="browse"
                             Click="OnBrowseClick" Margin="8,0,0,0"/>
-                    <TextBox x:Name="OutBox" Style="{StaticResource DarkTextBox}"
-                             TextChanged="OnOutEdited"/>
+                    <TextBox x:Name="OutBox" Style="{StaticResource DarkTextBox}" TextChanged="OnOutEdited"/>
                 </DockPanel>
             </Grid>
 
-            <TextBlock x:Name="NoteText" Margin="0,12,0,0"
-                       Foreground="{StaticResource TextDimBrush}" FontSize="11.5" FontFamily="Segoe UI"
-                       TextWrapping="Wrap"/>
-            <TextBlock x:Name="WarnText" Margin="0,4,0,0"
-                       Foreground="#D0A868" FontSize="11.5" FontFamily="Segoe UI"
-                       TextWrapping="Wrap" Visibility="Collapsed"/>
-            <TextBlock x:Name="SummaryText" Margin="0,10,0,0"
-                       Foreground="{StaticResource TextBrush}" FontSize="12" FontFamily="Segoe UI"/>
+            <TextBlock x:Name="WarnText" Margin="0,12,0,0" Foreground="{StaticResource WarnBrush}" FontSize="11.5"
+                       FontFamily="{StaticResource UiFont}" TextWrapping="Wrap" Visibility="Collapsed"/>
+            <TextBlock x:Name="EncoderText" Style="{StaticResource LabelText}" Margin="0,12,0,0"/>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                <Button Style="{StaticResource DarkButton}" Content="cancel" Click="OnCancelClick"
-                        Margin="0,0,8,0" MinWidth="80"/>
-                <Button x:Name="ExportBtn" Style="{StaticResource AccentButton}" Content="export"
-                        Click="OnExportClick" MinWidth="100"/>
+                <Button Style="{StaticResource DarkButton}" Content="cancel" Click="OnCancelClick" Margin="0,0,8,0" MinWidth="84"/>
+                <Button x:Name="ExportBtn" Style="{StaticResource AccentButton}" Content="export" Click="OnExportClick" MinWidth="110"/>
             </StackPanel>
         </StackPanel>
 
         <StackPanel x:Name="RunPanel" Visibility="Collapsed">
-            <TextBlock x:Name="RunStatus" Text="exporting"
-                       Foreground="{StaticResource TextBrush}" FontSize="12.5" FontFamily="Segoe UI"/>
-            <ProgressBar x:Name="RunProgress" Style="{StaticResource DarkProgressBar}"
-                         Minimum="0" Maximum="100" Margin="0,10,0,0"/>
-            <TextBlock x:Name="RunPercent" Text="0%"
-                       Foreground="{StaticResource TextDimBrush}" FontSize="11.5" FontFamily="Consolas"
-                       Margin="0,6,0,0"/>
+            <TextBlock x:Name="RunStatus" Text="exporting" Style="{StaticResource BaseText}" FontSize="15" FontWeight="SemiBold"/>
+            <ProgressBar x:Name="RunProgress" Style="{StaticResource DarkProgressBar}" Minimum="0" Maximum="100" Margin="0,14,0,0"/>
+            <TextBlock x:Name="RunDetail" Text="0%" Style="{StaticResource DimText}" Margin="0,8,0,0"/>
             <TextBox x:Name="ErrorBox" Style="{StaticResource DarkTextBox}" Visibility="Collapsed"
                      IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
-                     Height="110" VerticalScrollBarVisibility="Auto" Margin="0,10,0,0"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                     Height="120" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0" FontSize="11"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
                 <Button x:Name="ShowBtn" Style="{StaticResource DarkButton}" Content="show in folder"
                         Click="OnShowClick" Margin="0,0,8,0" Visibility="Collapsed"/>
+                <Button x:Name="PlayBtn" Style="{StaticResource DarkButton}" Content="play it"
+                        Click="OnPlayClick" Margin="0,0,8,0" Visibility="Collapsed"/>
                 <Button x:Name="AbortBtn" Style="{StaticResource DarkButton}" Content="cancel"
-                        Click="OnAbortClick" MinWidth="80"/>
+                        Click="OnAbortClick" MinWidth="84"/>
             </StackPanel>
         </StackPanel>
 

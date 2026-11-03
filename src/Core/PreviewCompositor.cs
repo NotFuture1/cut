@@ -162,11 +162,62 @@ public sealed class PreviewCompositor : IDisposable
             lp.ApplyVolume(Audible(c), _master);
             lp.Sync(t, _playing, seeked, inRange);
         }
+        if (_outlineClip != 0) DrawOutline(_state.FindClip(_outlineClip)?.Clip, t);
+    }
+
+    // ---- selection outline: four thin accent overlays around the selected layer ----
+
+    private const int OutlineBase = 60; // ids 60..63, above every layer
+    private int _outlineClip;
+    private Placement? _outlinePlace;
+    private readonly List<IntPtr> _outlineMem = new();
+
+    public void ShowOutline(Clip? clip, double t)
+    {
+        _outlineClip = clip?.Id ?? 0;
+        DrawOutline(clip, t);
+    }
+
+    private void DrawOutline(Clip? clip, double t)
+    {
+        var place = clip != null && t >= clip.Start && t < clip.End && LaneVisible(clip) ? Place(clip) : null;
+        if (place == _outlinePlace) return;
+        _outlinePlace = place;
+        if (place == null)
+        {
+            for (int i = 0; i < 4; i++) _main.OverlayRemove(OutlineBase + i);
+            return;
+        }
+        const int th = 2;
+        var w = Math.Max(th, place.W);
+        var h = Math.Max(th, place.H);
+        var horiz = Solid(w, th);
+        var vert = Solid(th, h);
+        _main.OverlayAdd(OutlineBase, place.X, place.Y, horiz, w, th, w * 4);
+        _main.OverlayAdd(OutlineBase + 1, place.X, place.Y + h - th, horiz, w, th, w * 4);
+        _main.OverlayAdd(OutlineBase + 2, place.X, place.Y, vert, th, h, th * 4);
+        _main.OverlayAdd(OutlineBase + 3, place.X + w - th, place.Y, vert, th, h, th * 4);
+        // mpv copies overlay pixels, so the buffers can go right away
+        foreach (var m in _outlineMem) Marshal.FreeHGlobal(m);
+        _outlineMem.Clear();
+        _outlineMem.Add(horiz);
+        _outlineMem.Add(vert);
+    }
+
+    private static IntPtr Solid(int w, int h)
+    {
+        var mem = Marshal.AllocHGlobal(w * h * 4);
+        var px = new int[w * h];
+        Array.Fill(px, unchecked((int)0xFFE5484D)); // bgra bytes 4D 48 E5 FF
+        Marshal.Copy(px, 0, mem, px.Length);
+        return mem;
     }
 
     public void Dispose()
     {
         _disposed = true;
+        foreach (var m in _outlineMem) Marshal.FreeHGlobal(m);
+        _outlineMem.Clear();
         foreach (var m in _media.Values) m.Dispose();
         _media.Clear();
         foreach (var im in _images.Values) im.Dispose(_main);
@@ -198,7 +249,9 @@ public sealed class PreviewCompositor : IDisposable
             var want = (place.FullW, place.FullH, (float)opacity);
             if (_data == IntPtr.Zero || (_w, _h, _op) != want)
             {
-                if (!_loading || _want != want) Decode(want, post, again);
+                // one decode in flight; the newest wanted size is picked up when it lands
+                if (!_loading) Decode(want, post, again);
+                else _want = want;
                 if (_data == IntPtr.Zero || _w != want.Item1 || _h != want.Item2) return;
             }
             if (_shownId == id && _shownPlace == place) return;
@@ -227,8 +280,14 @@ public sealed class PreviewCompositor : IDisposable
                 var px = await DecodeImage(path, want.W, want.H, want.Op);
                 post(() =>
                 {
-                    if (_want != want) return; // a newer size was requested meanwhile
                     _loading = false;
+                    if (_want != want)
+                    {
+                        // a newer size was requested meanwhile
+                        if (px != IntPtr.Zero) Marshal.FreeHGlobal(px);
+                        Decode(_want, post, again);
+                        return;
+                    }
                     if (px == IntPtr.Zero) return;
                     var old = _data;
                     _data = px;

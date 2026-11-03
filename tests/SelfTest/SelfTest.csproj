@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="../../src/Core/*.cs" Exclude="../../src/Core/MpvHost.cs" />
+    <Compile Include="../../src/Core/*.cs" />
   </ItemGroup>
 
 </Project>

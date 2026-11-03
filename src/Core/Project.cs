@@ -136,6 +136,7 @@ public sealed class ProjectStore
     public event Action<ChangeKind>? Changed;
 
     public bool CanUndo => _undo.Count > 0;
+    public bool InGesture => _gestureStart != null;
     public bool CanRedo => _redo.Count > 0;
 
     public void Reset(ProjectState state, double total)

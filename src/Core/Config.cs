@@ -24,6 +24,7 @@ public sealed class Config
     [JsonPropertyName("exportFormat")] public string ExportFormat { get; set; } = "mp4";
 
     [JsonPropertyName("skippedVersion")] public string? SkippedVersion { get; set; }
+    [JsonPropertyName("recent")] public List<string> Recent { get; set; } = new();
 
     public static Config Load()
     {
