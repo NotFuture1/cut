@@ -307,8 +307,10 @@ public partial class ExportDialog : Window
         var clock = Stopwatch.StartNew();
 
         var job = new ExportJob();
+        var finished = false;
         job.Progress += p => Dispatcher.BeginInvoke(() =>
         {
+            if (finished) return; // a late progress tick must not overwrite the result line
             RunProgress.Value = p.Fraction * 100;
             var parts = new List<string> { $"{(int)(p.Fraction * 100)}%" };
             if (p.Speed > 0.05) parts.Add($"{p.Speed:0.0}× realtime");
@@ -318,6 +320,7 @@ public partial class ExportDialog : Window
         job.Status += s => Dispatcher.BeginInvoke(() => RunStatus.Text = s);
 
         var (ok, error) = await job.RunAsync(_media, _state, options, _cts.Token);
+        finished = true;
         _cts = null;
 
         if (ok)

@@ -65,10 +65,46 @@ public static class Encoders
         return args;
     }
 
+    private static string CacheFile => Path.Combine(Paths.AppDataDir, "encoder.txt");
+
+    // the answer only changes with the gpu driver or ffmpeg: re-check weekly or when ffmpeg changes
+    private static string Stamp()
+    {
+        try { return File.GetLastWriteTimeUtc(ToolPaths.Ffmpeg).Ticks.ToString(CultureInfo.InvariantCulture); }
+        catch { return "?"; }
+    }
+
     private static async Task<VideoEncoder> DetectAsync()
     {
         if (!OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable("CUT_HW_DETECT") != "1")
             return VideoEncoder.X264;
+        try
+        {
+            if (File.Exists(CacheFile) && DateTime.UtcNow - File.GetLastWriteTimeUtc(CacheFile) < TimeSpan.FromDays(7))
+            {
+                var parts = File.ReadAllText(CacheFile).Split('|');
+                if (parts.Length == 2 && parts[0] == Stamp() && Enum.TryParse<VideoEncoder>(parts[1], out var cached))
+                {
+                    Logger.Info($"video encoder (cached): {cached}");
+                    return cached;
+                }
+            }
+        }
+        catch { /* re-detect */ }
+        var found = await ProbeAllAsync();
+        try { Paths.EnsureBaseDirs(); File.WriteAllText(CacheFile, $"{Stamp()}|{found}"); } catch { /* fine */ }
+        return found;
+    }
+
+    // a failed hardware export forgets the cached choice so the next launch probes again
+    public static void Forget()
+    {
+        try { File.Delete(CacheFile); } catch { /* fine */ }
+    }
+
+    private static async Task<VideoEncoder> ProbeAllAsync()
+    {
+        await Task.Delay(1500); // let startup and the first file open go first
 
         var candidates = new[] { VideoEncoder.Nvenc, VideoEncoder.Qsv, VideoEncoder.Amf };
         var tasks = candidates.Select(async e =>

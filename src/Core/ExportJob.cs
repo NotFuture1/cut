@@ -33,6 +33,7 @@ public sealed class ExportJob
                 && (Encoders.IsHardware(options.Encoder) || options.HwDecode))
             {
                 Logger.Warn($"export failed with {options.Encoder}/hwdec, retrying on cpu");
+                if (Encoders.IsHardware(options.Encoder)) Encoders.Forget();
                 Status?.Invoke("retrying on cpu");
                 (ok, err) = await RunPlanAsync(media, state, options.With(VideoEncoder.X264, false), staging, tmpOut, ct);
             }

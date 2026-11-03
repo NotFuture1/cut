@@ -25,6 +25,7 @@ public sealed class Demo
     private readonly List<(string Name, double At)> _stills = new();
     private readonly List<(string Step, bool Ok, string Note)> _results = new();
     private Process? _rec;
+    private double _stopAt;
     private Point _cursor;
     private double _markStart;
 
@@ -436,6 +437,7 @@ public sealed class Demo
     private async Task StopRecording()
     {
         if (_rec == null) return;
+        _stopAt = Now;
         try
         {
             await _rec.StandardInput.WriteAsync("q");
@@ -456,8 +458,14 @@ public sealed class Demo
         var gifs = Path.Combine(_out, "guide");
         Directory.CreateDirectory(gifs);
         string T(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
-        foreach (var (name, start, end) in _clips)
+        // the recorder needs a moment to start: line our clock up with the recording's
+        var rawDur = (await Probe.RunAsync(raw)).Duration;
+        var lag = rawDur > 0 ? Math.Clamp(_stopAt - rawDur, 0, 3) : 0;
+        Log($"recording lag {lag:0.00}s");
+        foreach (var (name, start0, end0) in _clips)
         {
+            var start = Math.Max(0, start0 - lag);
+            var end = end0 - lag;
             var (code, err) = await ExportJob.RunFfmpegAsync(new List<string>
             {
                 "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-ss", T(start), "-t", T(Math.Min(14, end - start)), "-i", raw,
@@ -470,7 +478,7 @@ public sealed class Demo
         {
             await ExportJob.RunFfmpegAsync(new List<string>
             {
-                "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-ss", T(at), "-i", raw, "-frames:v", "1",
+                "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-ss", T(Math.Max(0, at - lag)), "-i", raw, "-frames:v", "1",
                 Path.Combine(gifs, name + ".png"),
             }, CancellationToken.None, log: false);
         }
