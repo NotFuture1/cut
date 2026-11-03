@@ -4,3 +4,5 @@ publish/
 installer/Output/
 *.user
 .DS_Store
+tests/**/bin/
+tests/**/obj/
